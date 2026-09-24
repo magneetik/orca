@@ -37,6 +37,7 @@ const IME_OWNED_PREEDIT_WINDOW_MS = 1500
 const ASCII_LOWERCASE_LETTER = /^[a-z]$/
 const ASCII_DIGIT = /^[0-9]$/
 const PHYSICAL_ASCII_LETTER_CODE = /^Key[A-Z]$/
+const PHYSICAL_CANDIDATE_SELECTOR_CODE = /^(?:Space|Digit[0-9]|Numpad[0-9])$/
 const physicalKeyTrackers = new WeakMap<
   EventTarget,
   TerminalImeLinuxPhysicalKeyTracker & { users: number }
@@ -213,13 +214,23 @@ export function createTerminalImeLinuxCandidateState(
         if (isImeOwnedLetterKeydown(event)) {
           imeOwnedPreeditUntil = at + IME_OWNED_PREEDIT_WINDOW_MS
         } else if (isImeClaimedKeydown(event)) {
-          // Why refresh rather than arm: the IME also claims the keys that edit
-          // and page the preedit — Backspace, the arrows, `-`/`=` for the next
-          // candidate page. Treating those as unclaimed disarmed the window
-          // mid-pick and let the following selector through, but claiming them
-          // from cold would arm on a bare navigation key with no preedit.
+          // A claimed selector means the engine took the pick itself, so the
+          // round is over. `key` reads `Process` there, which the selector
+          // predicate cannot see, so this asks the physical code instead. Ending
+          // the window here is what keeps a literal Space safe when an engine
+          // opens a composition session and never closes it.
           imeOwnedPreeditUntil =
-            imeOwnedPreeditUntil > at ? at + IME_OWNED_PREEDIT_WINDOW_MS : imeOwnedPreeditUntil
+            event.code !== undefined && PHYSICAL_CANDIDATE_SELECTOR_CODE.test(event.code)
+              ? 0
+              : // Why refresh rather than arm: the IME also claims the keys that
+                // edit and page the preedit — Backspace, the arrows, `-`/`=` for
+                // the next candidate page. Treating those as unclaimed disarmed
+                // the window mid-pick and let the following selector through,
+                // but claiming them from cold would arm on a bare navigation key
+                // with no preedit behind it.
+                imeOwnedPreeditUntil > at
+                ? at + IME_OWNED_PREEDIT_WINDOW_MS
+                : imeOwnedPreeditUntil
         } else if (!isTerminalImeCandidateSelectionKeyEvent(event)) {
           imeOwnedPreeditUntil = 0
         }

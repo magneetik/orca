@@ -128,3 +128,53 @@ describe('a composition session that commits on Space', () => {
     state.dispose()
   })
 })
+
+/**
+ * Belt and braces for an engine that opens a composition session and never closes
+ * it — a documented defect in at least one shipped input framework. Without a
+ * `compositionend` the session-end release never runs, so the claimed selector
+ * itself has to end the window.
+ */
+describe('a composition session that never ends', () => {
+  it.each(['Space', 'Digit2', 'Numpad2'])(
+    'still frees the next literal Space after a claimed %s',
+    (selectorCode) => {
+      const { element, state, advance } = installOnElement()
+      const feed = (keyboardEvent: XtermBypassEvent): void => {
+        state.observeKeyboardEvent(keyboardEvent, state.classifyKeyboardEvent(keyboardEvent))
+      }
+
+      feed(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+      element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }))
+      advance(40)
+      feed(event({ key: 'Process', code: 'KeyI', keyCode: 229 }))
+      element.dispatchEvent(
+        new InputEvent('input', { inputType: 'insertCompositionText', data: 'ni' })
+      )
+      advance(40)
+      feed(event({ key: 'Process', code: selectorCode, keyCode: 229 }))
+      element.dispatchEvent(
+        new InputEvent('input', { inputType: 'insertCompositionText', data: '你' })
+      )
+      // No compositionend arrives.
+      advance(40)
+
+      expect(claimsSpace(state)).toBe(false)
+      state.dispose()
+    }
+  )
+
+  it('still lets the IME page its candidate list', () => {
+    const { element, state, advance } = installOnElement()
+    const feed = (keyboardEvent: XtermBypassEvent): void => {
+      state.observeKeyboardEvent(keyboardEvent, state.classifyKeyboardEvent(keyboardEvent))
+    }
+    feed(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+    advance(40)
+    feed(event({ key: 'Process', code: 'Equal', keyCode: 229 }))
+    advance(40)
+    expect(claimsSpace(state)).toBe(true)
+    state.dispose()
+    element.remove()
+  })
+})
