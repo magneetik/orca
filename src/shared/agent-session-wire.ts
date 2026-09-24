@@ -420,7 +420,7 @@ export type AgentSessionOptionsResult = {
   current: {
     model: string
     effort?: string
-    /** Absent until the session reports or is given one, which reads as the launch mode. */
+    /** Absent until the user dispatches one: the child never reports its own mode. */
     permissionMode?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
