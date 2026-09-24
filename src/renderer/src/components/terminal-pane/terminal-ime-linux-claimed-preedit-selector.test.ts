@@ -91,6 +91,52 @@ describe('claimed-preedit candidate selectors on Linux', () => {
     ).toBe(false)
   })
 
+  // Chromium preserves the original `code` on the 229/Process keydown the IME
+  // consumed, so the keys that edit and page a preedit arrive claimed too.
+  it.each([
+    ['Backspace', 'Backspace'],
+    ['candidate navigation', 'ArrowDown'],
+    ['next candidate page', 'Equal'],
+    ['previous candidate page', 'Minus'],
+    ['page down', 'PageDown']
+  ])('keeps the window open across a claimed %s keydown', (_label, code) => {
+    let time = 1_000
+    const state = createTerminalImeLinuxCandidateState(() => time)
+    observe(state, claimedLetterKeydown('KeyN'))
+    time += 40
+    observe(state, event({ key: 'Process', code, keyCode: 229 }))
+    time += 40
+    expect(
+      state.classifyKeyboardEvent(event({ key: '2', code: 'Digit2', keyCode: 50 }))
+        .imeOwnedPreeditGuardActive
+    ).toBe(true)
+  })
+
+  it('refreshes the deadline while the IME keeps claiming keys, without arming from cold', () => {
+    let time = 1_000
+    const state = createTerminalImeLinuxCandidateState(() => time)
+    observe(state, claimedLetterKeydown('KeyN'))
+    // Browsing candidate pages for longer than one window still picks correctly.
+    for (let page = 0; page < 3; page += 1) {
+      time += 1_000
+      observe(state, event({ key: 'Process', code: 'Equal', keyCode: 229 }))
+    }
+    time += 40
+    expect(
+      state.classifyKeyboardEvent(event({ key: '2', code: 'Digit2', keyCode: 50 }))
+        .imeOwnedPreeditGuardActive
+    ).toBe(true)
+
+    // A claimed navigation key on its own is not evidence of an open preedit.
+    const cold = createTerminalImeLinuxCandidateState(() => time)
+    observe(cold, event({ key: 'Process', code: 'ArrowDown', keyCode: 229 }))
+    time += 40
+    expect(
+      cold.classifyKeyboardEvent(event({ key: ' ', code: 'Space', keyCode: 32 }))
+        .imeOwnedPreeditGuardActive
+    ).toBe(false)
+  })
+
   it('leaves ordinary Latin typing alone', () => {
     let time = 1_000
     const state = createTerminalImeLinuxCandidateState(() => time)

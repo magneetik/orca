@@ -108,25 +108,33 @@ function releasePhysicalKeyTracker(
 }
 
 /**
- * A letter keydown the input framework has already claimed for a preedit.
+ * A keydown the input framework has already claimed.
  *
  * Why this is the signal: Sogou on fcitx draws its preedit and candidate list in
  * its own window and opens no Chromium composition session at all, so every
  * composition-scoped guard is inactive when the user presses the selector. What
  * it does still deliver is the claimed keydown — `keyCode 229` / `key 'Process'`
- * over the physical letter — and that is positive evidence that some preedit the
- * renderer cannot see is open. fcitx5 on Wayland omits the marker instead, which
- * is why this complements the orphan-keyup window rather than replacing it.
+ * over the original physical key — and that is positive evidence that some
+ * preedit the renderer cannot see is open. fcitx5 on Wayland omits the marker
+ * instead, which is why this complements the orphan-keyup window rather than
+ * replacing it.
  */
-function isImeOwnedLetterKeydown(event: XtermBypassEvent): boolean {
+function isImeClaimedKeydown(event: XtermBypassEvent): boolean {
   return (
     event.type === 'keydown' &&
     (event.keyCode === 229 || event.key === 'Process') &&
-    event.code !== undefined &&
-    PHYSICAL_ASCII_LETTER_CODE.test(event.code) &&
     !event.ctrlKey &&
     !event.altKey &&
     !event.metaKey
+  )
+}
+
+/** A claimed keydown over a letter, which is a preedit being spelled out. */
+function isImeOwnedLetterKeydown(event: XtermBypassEvent): boolean {
+  return (
+    isImeClaimedKeydown(event) &&
+    event.code !== undefined &&
+    PHYSICAL_ASCII_LETTER_CODE.test(event.code)
   )
 }
 
@@ -204,6 +212,14 @@ export function createTerminalImeLinuxCandidateState(
       if (event.type === 'keydown') {
         if (isImeOwnedLetterKeydown(event)) {
           imeOwnedPreeditUntil = at + IME_OWNED_PREEDIT_WINDOW_MS
+        } else if (isImeClaimedKeydown(event)) {
+          // Why refresh rather than arm: the IME also claims the keys that edit
+          // and page the preedit — Backspace, the arrows, `-`/`=` for the next
+          // candidate page. Treating those as unclaimed disarmed the window
+          // mid-pick and let the following selector through, but claiming them
+          // from cold would arm on a bare navigation key with no preedit.
+          imeOwnedPreeditUntil =
+            imeOwnedPreeditUntil > at ? at + IME_OWNED_PREEDIT_WINDOW_MS : imeOwnedPreeditUntil
         } else if (!isTerminalImeCandidateSelectionKeyEvent(event)) {
           imeOwnedPreeditUntil = 0
         }
