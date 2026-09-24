@@ -90,3 +90,41 @@ describe('claimed-preedit window release wiring', () => {
     expect(claimsSpace(state)).toBe(true)
   })
 })
+
+/**
+ * The full session shape for a Pinyin/Mozc/Anthy/Zhuyin engine that commits on
+ * Space: every letter after the first re-arms the window, the commit travels as
+ * preedit text, and the committing Space itself arrives claimed. Only the end of
+ * the session can close the window before the user's next literal Space.
+ */
+describe('a composition session that commits on Space', () => {
+  it('leaves the following literal Space alone', () => {
+    const { element, state, advance } = installOnElement()
+    const feed = (keyboardEvent: XtermBypassEvent): boolean => {
+      const classification = state.classifyKeyboardEvent(keyboardEvent)
+      state.observeKeyboardEvent(keyboardEvent, classification)
+      return classification.imeOwnedPreeditGuardActive
+    }
+
+    feed(event({ key: 'Process', code: 'KeyN', keyCode: 229 }))
+    element.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }))
+    advance(40)
+    // A second claimed letter re-arms; there is no second compositionstart.
+    feed(event({ key: 'Process', code: 'KeyI', keyCode: 229 }))
+    element.dispatchEvent(
+      new InputEvent('input', { inputType: 'insertCompositionText', data: 'ni' })
+    )
+    advance(40)
+
+    // The committing Space is claimed by the engine, so it never reaches the guard.
+    expect(feed(event({ key: 'Process', code: 'Space', keyCode: 229 }))).toBe(false)
+    element.dispatchEvent(
+      new InputEvent('input', { inputType: 'insertCompositionText', data: '你' })
+    )
+    element.dispatchEvent(new CompositionEvent('compositionend', { data: '你' }))
+    advance(40)
+
+    expect(claimsSpace(state)).toBe(false)
+    state.dispose()
+  })
+})
