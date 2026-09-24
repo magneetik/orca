@@ -25,6 +25,11 @@ export function readClaudeSettingsEffort(settings: unknown): string | null {
   return text(record(record(settings)?.effective)?.effortLevel)
 }
 
+/** Only CLIs that publish the mode in `system/init` answer here; absence is not a default. */
+export function readClaudeInitPermissionMode(initialization: unknown): string | null {
+  return text(record(initialization)?.permissionMode)
+}
+
 export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastMode
   return typeof value === 'boolean' ? value : null
@@ -253,6 +258,7 @@ export async function readClaudeStructuredSessionOptions(
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
   const support = claudeFastModeSupport(discovered, session.fastModeDisabledReason)
+  const permissionMode = session.options.get('permissionMode')
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
@@ -271,8 +277,11 @@ export async function readClaudeStructuredSessionOptions(
       ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {})
     })),
     ...(support ? { fastModeSupport: support } : {}),
+    // stream-json applies setPermissionMode to a live query, so this session can always change it.
+    permissionModeSupport: { supported: true },
     current: {
       model,
+      ...(permissionMode ? { permissionMode } : {}),
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),
