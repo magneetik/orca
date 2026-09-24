@@ -30,14 +30,20 @@ type TerminalImeLinuxPhysicalKeyTracker = {
 }
 
 const CANDIDATE_DIGIT_WINDOW_MS = 1500
-// Why: the same picking window as the orphan-keyup path, measured from the last
-// key the IME claimed rather than from a commit, because the commit is what the
-// selector is being pressed to produce.
+// A stuck-state valve, not an attribution window: every normal path out of a
+// pick is event-driven — the session's start or end, a non-preedit commit, a
+// claimed commit or cancel key, an unclaimed key, or blur. Claimed keys refresh
+// it, so this only expires when the IME stops reporting entirely.
 const IME_OWNED_PREEDIT_WINDOW_MS = 1500
 const ASCII_LOWERCASE_LETTER = /^[a-z]$/
 const ASCII_DIGIT = /^[0-9]$/
 const PHYSICAL_ASCII_LETTER_CODE = /^Key[A-Z]$/
-const PHYSICAL_CANDIDATE_SELECTOR_CODE = /^(?:Space|Digit[0-9]|Numpad[0-9])$/
+// Why these and not the navigation keys: an engine commits or cancels with
+// Space, Enter or Escape and pages with the arrows, `-`/`=` and PageUp/PageDown.
+// Physical codes rather than `key`, because `key` reads `Process` on all of them
+// and because the digit row moves on AZERTY, Dvorak and Colemak while `Digit*`
+// does not.
+const PHYSICAL_PICK_ENDING_CODE = /^(?:Space|Enter|NumpadEnter|Escape|Digit[0-9]|Numpad[0-9])$/
 const physicalKeyTrackers = new WeakMap<
   EventTarget,
   TerminalImeLinuxPhysicalKeyTracker & { users: number }
@@ -214,13 +220,11 @@ export function createTerminalImeLinuxCandidateState(
         if (isImeOwnedLetterKeydown(event)) {
           imeOwnedPreeditUntil = at + IME_OWNED_PREEDIT_WINDOW_MS
         } else if (isImeClaimedKeydown(event)) {
-          // A claimed selector means the engine took the pick itself, so the
-          // round is over. `key` reads `Process` there, which the selector
-          // predicate cannot see, so this asks the physical code instead. Ending
-          // the window here is what keeps a literal Space safe when an engine
-          // opens a composition session and never closes it.
+          // A claimed commit or cancel means the engine ended the round itself.
+          // Ending the window here is what keeps a literal Space safe when an
+          // engine opens a composition session and never closes it.
           imeOwnedPreeditUntil =
-            event.code !== undefined && PHYSICAL_CANDIDATE_SELECTOR_CODE.test(event.code)
+            event.code !== undefined && PHYSICAL_PICK_ENDING_CODE.test(event.code)
               ? 0
               : // Why refresh rather than arm: the IME also claims the keys that
                 // edit and page the preedit — Backspace, the arrows, `-`/`=` for

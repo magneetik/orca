@@ -136,7 +136,7 @@ describe('a composition session that commits on Space', () => {
  * itself has to end the window.
  */
 describe('a composition session that never ends', () => {
-  it.each(['Space', 'Digit2', 'Numpad2'])(
+  it.each(['Space', 'Enter', 'NumpadEnter', 'Escape', 'Digit2', 'Numpad2'])(
     'still frees the next literal Space after a claimed %s',
     (selectorCode) => {
       const { element, state, advance } = installOnElement()
