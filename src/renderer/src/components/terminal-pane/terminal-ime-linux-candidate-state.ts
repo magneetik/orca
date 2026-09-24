@@ -273,10 +273,13 @@ export function installTerminalImeLinuxCandidateState(
   const state = createTerminalImeLinuxCandidateState(now, physicalKeyTracker.pressedCodes)
   // Why: an input source that does open a composition session is already owned
   // by the composition-scoped guards, so the claimed-keydown window must stand
-  // down for it rather than claim the same selector twice.
-  const releaseToComposition = (): void => state.resetImeOwnedPreeditGuard()
+  // down at both boundaries rather than claim the same selector twice.
+  const releaseToCompositionSession = (): void => state.resetImeOwnedPreeditGuard()
   // Why: a commit that is not preedit text means the picking round is over and
-  // the next Space or digit is literal terminal input again.
+  // the next Space or digit is literal terminal input again. A session-running
+  // IME commits through `insertCompositionText` instead and is released by
+  // `compositionend` below, so this stays narrow rather than matching every
+  // input event.
   const releaseOnCommit = (event: Event): void => {
     if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
       return
@@ -284,13 +287,21 @@ export function installTerminalImeLinuxCandidateState(
     state.resetImeOwnedPreeditGuard()
   }
   terminalElement?.addEventListener('blur', state.resetCandidateGuard, true)
-  terminalElement?.addEventListener('compositionstart', releaseToComposition, true)
+  terminalElement?.addEventListener('compositionstart', releaseToCompositionSession, true)
+  // Why both ends of the session: the claimed keydowns an engine that DOES run a
+  // composition session emits still arm this window, and its commit and its
+  // cancel both travel as `insertCompositionText`, which `releaseOnCommit`
+  // deliberately ignores. Without this the window outlived a cancelled preedit
+  // and swallowed the next literal Space. The engines this guard exists for emit
+  // no `compositionend` at all, so releasing here cannot reach them.
+  terminalElement?.addEventListener('compositionend', releaseToCompositionSession, true)
   terminalElement?.addEventListener('input', releaseOnCommit, true)
   return {
     ...state,
     dispose: () => {
       terminalElement?.removeEventListener('blur', state.resetCandidateGuard, true)
-      terminalElement?.removeEventListener('compositionstart', releaseToComposition, true)
+      terminalElement?.removeEventListener('compositionstart', releaseToCompositionSession, true)
+      terminalElement?.removeEventListener('compositionend', releaseToCompositionSession, true)
       terminalElement?.removeEventListener('input', releaseOnCommit, true)
       physicalKeyTracker.dispose()
     }
