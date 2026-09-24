@@ -1,6 +1,5 @@
 import {
   readClaudeFastModeFacts,
-  readClaudeInitPermissionMode,
   readClaudeSettingsFastMode,
   readClaudeSettingsFastModePerSessionOptIn
 } from './claude-structured-session-options'
@@ -19,7 +18,6 @@ export function prepareClaudeStructuredSessionAcquisitionOptions(args: {
   initialization: unknown
   inputOptions: Readonly<Record<string, string>> | undefined
   resumed: boolean
-  launchPermissionMode: string
 }) {
   const fastMode = readClaudeSettingsFastMode(args.settings)
   const fastModePerSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(args.settings)
@@ -27,14 +25,6 @@ export function prepareClaudeStructuredSessionAcquisitionOptions(args: {
   const options = restoredClaudeStructuredSessionOptions(args.inputOptions)
   if (!args.resumed && fastModePerSessionOptIn === true && options.get('fastMode') === 'true') {
     options.delete('fastMode')
-  }
-  // The mode a session runs in is knowable at launch, and the child does not report it back,
-  // so seed it here or the picker has no value to name and renders unset.
-  if (!options.has('permissionMode')) {
-    options.set(
-      'permissionMode',
-      readClaudeInitPermissionMode(args.initialization) ?? args.launchPermissionMode
-    )
   }
   return { fastMode, fastModePerSessionOptIn, fastModeFacts, options }
 }

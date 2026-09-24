@@ -25,11 +25,6 @@ export function readClaudeSettingsEffort(settings: unknown): string | null {
   return text(record(record(settings)?.effective)?.effortLevel)
 }
 
-/** Only CLIs that publish the mode in `system/init` answer here; absence is not a default. */
-export function readClaudeInitPermissionMode(initialization: unknown): string | null {
-  return text(record(initialization)?.permissionMode)
-}
-
 export function readClaudeSettingsFastMode(settings: unknown): boolean | null {
   const value = record(record(settings)?.effective)?.fastMode
   return typeof value === 'boolean' ? value : null

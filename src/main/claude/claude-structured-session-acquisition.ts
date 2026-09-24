@@ -229,8 +229,7 @@ export async function acquireClaudeSession({
       settings,
       initialization,
       inputOptions: input.options,
-      resumed: launch.resumed,
-      launchPermissionMode: launch.permissionMode
+      resumed: launch.resumed
     })
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {

@@ -91,8 +91,6 @@ export type ClaudeStructuredLaunch = {
   options: ClaudeStructuredSdkOptions
   cwd: string
   env?: Record<string, string>
-  /** The mode this launch resolved, which the session seeds so the picker can name it. */
-  permissionMode: PermissionMode
   claudeConfigDir: string
   providerSessionId: string
   /** The previous head leaf, carried into the publication link; never a resume argument. */
@@ -197,8 +195,9 @@ export function createClaudeStructuredLaunchResolver(
         : claudeSessionIdForOrcaSession(identity.sessionId)
     // `record.launchArgs` is deliberately not read: the configured CLI arguments are a terminal
     // concern, and the permission mode they used to smuggle in is an owned provider option now.
-    const permissionMode = (await deps.resolvePermissionMode?.()) ?? 'default'
-    const permission = claudeStructuredPermissionOptions(permissionMode)
+    const permission = claudeStructuredPermissionOptions(
+      (await deps.resolvePermissionMode?.()) ?? 'default'
+    )
     const command = (deps.resolveCommand ?? resolveClaudeCommand)()
     const auth = await deps.resolveAuthPolicy()
     const overlay = await deps.resolveEnv?.()
@@ -250,8 +249,6 @@ export function createClaudeStructuredLaunchResolver(
       },
       cwd: await deps.resolveWorkspacePath(record.location.workspaceId),
       env,
-      // Only `bypassPermissions` reaches the child as a flag, so the mode itself travels here.
-      permissionMode,
       claudeConfigDir: record.accountHome.path,
       providerSessionId,
       resumeLeafUuid: head?.handle.provider === 'claude' ? head.handle.leafUuid : null,
